@@ -1,0 +1,24 @@
+MarketIQ
+Copyright 2026 Madhav Chauhan
+
+This product includes software developed by the AI4Finance Foundation:
+FinRL-X / FinRL-Trading (https://github.com/AI4Finance-Foundation/FinRL-Trading)
+Copyright FinRL LLC / AI4Finance Foundation, licensed under the Apache License, Version 2.0.
+
+The original FinRL-X source tree is preserved unmodified under legacy/finrlx/ (upstream commit
+4409abe). The following MarketIQ files are adapted from FinRL-X and carry an attribution header:
+
+  marketiq/config/settings.py          <- src/config/settings.py (pydantic-settings pattern)
+  marketiq/data/calendar.py            <- src/data/trading_calendar.py
+  marketiq/data/models.py              <- src/data/data_store.py (schema concepts)
+  marketiq/data/providers/fmp.py       <- src/data/data_fetcher.py (FMP endpoints, incremental fetch)
+  marketiq/analysis/sentiment.py       <- src/data/data_fetcher.py (OpenAI sentiment classifier)
+  marketiq/backtest/metrics.py         <- src/backtest/backtest_engine.py, src/trading/performance_analyzer.py
+  marketiq/backtest/walk_forward.py    <- src/strategies/adaptive_rotation/walk_forward.py (pattern)
+  marketiq/paper/alpaca_adapter.py     <- src/trading/alpaca_manager.py
+
+The bundled dataset data/finrl_trading.7z (daily prices and FMP quarterly statements) is distributed
+by the FinRL-Trading repository. FinRL-X paper: Yang, Zhang, She, Liao, Zhang, "FinRL-X: An AI-Native
+Modular Infrastructure for Quantitative Trading", DMO-FinTech workshop at PAKDD 2026, arXiv:2603.21330.
+
+MarketIQ is distributed under the Apache License, Version 2.0 (see LICENSE).

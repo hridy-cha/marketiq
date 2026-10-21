@@ -1,0 +1,18 @@
+services:
+  api:
+    build: .
+    ports: ["8000:8000"]
+    volumes:
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./config:/app/config
+    env_file: .env
+    environment:
+      - API_HOST=0.0.0.0
+      - API_CORS_ORIGINS=["http://localhost:3000"]
+  web:
+    build: ./web
+    ports: ["3000:3000"]
+    environment:
+      - NEXT_PUBLIC_API_URL=http://api:8000
+    depends_on: [api]

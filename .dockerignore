@@ -1,0 +1,8 @@
+.git
+data/*.db*
+data/*.7z
+legacy
+web/node_modules
+web/.next
+tests
+docs/screenshots
