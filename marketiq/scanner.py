@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from marketiq.data.models import EarningsEvent
 
-from marketiq.analysis.fundamentals import FundamentalSnapshot, compute_fundamentals, universe_percentiles
+from marketiq.analysis.fundamentals import FundamentalSnapshot, build_statement_frames, compute_fundamentals_from_frames, universe_percentiles
 from marketiq.analysis.indicators import compute_indicators
 from marketiq.analysis.patterns import detect_all
 from marketiq.analysis.sentiment import AggregateSentiment, aggregate_sentiment
@@ -65,7 +65,7 @@ class ScanContext:
     signals: SignalConfig
     prices: Dict[str, pd.DataFrame] = field(default_factory=dict)
     indicators: Dict[str, pd.DataFrame] = field(default_factory=dict)
-    fundamentals: Dict[str, list] = field(default_factory=dict)  # symbol -> payload rows (all)
+    fundamentals: Dict[str, Dict[str, pd.DataFrame]] = field(default_factory=dict)  # symbol -> statement frames
     news: Dict[str, list] = field(default_factory=dict)
     earnings: Dict[str, List[date]] = field(default_factory=dict)
     ml_predictor: Optional[MLPredictor] = None
@@ -97,7 +97,8 @@ class ScanContext:
             ctx.prices[sym] = df
             ctx.indicators[sym] = compute_indicators(df)
         for sym in universe.symbols:
-            ctx.fundamentals[sym] = repo.get_fundamental_payloads(session, sym)
+            ctx.fundamentals[sym] = build_statement_frames(repo.get_fundamental_payloads(session, sym),
+                                                           lag_days=repo.UNKNOWN_FILING_LAG_DAYS)
             events = session.scalars(
                 select(EarningsEvent.event_date).where(EarningsEvent.symbol == sym)
             ).all()
@@ -136,9 +137,8 @@ class ScanContext:
         snaps: Dict[str, FundamentalSnapshot] = {}
         for sym, ind in inds.items():
             d = ind.index[-1].date()
-            payloads = [p for p in self.fundamentals.get(sym, []) if repo.payload_visible_on(p, d)]
-            snaps[sym] = compute_fundamentals(sym, payloads, d, float(ind["close"].iloc[-1]),
-                                              self.scoring.fundamentals.max_staleness_days)
+            snaps[sym] = compute_fundamentals_from_frames(sym, self.fundamentals.get(sym, {}), d, float(ind["close"].iloc[-1]),
+                                                          self.scoring.fundamentals.max_staleness_days)
         pct = universe_percentiles(snaps, self.scoring.fundamentals.factors)
 
         rows: List[ScanRow] = []

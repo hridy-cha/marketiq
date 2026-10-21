@@ -67,12 +67,33 @@ def _num(v) -> Optional[float]:
         return None
 
 
-def _frame(payloads, statement: str) -> pd.DataFrame:
-    rows = [{"period_end": p.period_end, "filing_date": p.filing_date, **p.data} for p in payloads if p.statement == statement]
-    if not rows:
+STATEMENTS = ("income", "balance", "cashflow", "ratios")
+
+
+def build_statement_frames(payloads, lag_days: int = 45) -> Dict[str, pd.DataFrame]:
+    """One DataFrame per statement with a `visible_from` column (filing date, or period end plus a
+    conservative lag when the filing date is unknown). Built once per symbol and sliced per date."""
+    out: Dict[str, pd.DataFrame] = {}
+    for statement in STATEMENTS:
+        rows = []
+        for p in payloads:
+            if p.statement != statement:
+                continue
+            visible = p.filing_date if p.filing_date is not None else p.period_end + pd.Timedelta(days=lag_days).to_pytimedelta()
+            rows.append({"period_end": p.period_end, "filing_date": p.filing_date, "visible_from": visible, **p.data})
+        if not rows:
+            out[statement] = pd.DataFrame()
+            continue
+        df = pd.DataFrame(rows).sort_values("period_end").drop_duplicates("period_end", keep="last")
+        out[statement] = df.reset_index(drop=True)
+    return out
+
+
+def _visible(frames: Dict[str, pd.DataFrame], statement: str, as_of: date) -> pd.DataFrame:
+    df = frames.get(statement)
+    if df is None or df.empty:
         return pd.DataFrame()
-    df = pd.DataFrame(rows).sort_values("period_end").drop_duplicates("period_end", keep="last")
-    return df.reset_index(drop=True)
+    return df[df["visible_from"] <= as_of]
 
 
 def _ttm(df: pd.DataFrame, col: str, offset: int = 0) -> Optional[float]:
@@ -112,15 +133,23 @@ def _ratio(a: Optional[float], b: Optional[float]) -> Optional[float]:
 def compute_fundamentals(
     symbol: str, payloads: list, as_of: date, price: Optional[float], max_staleness_days: int = 400
 ) -> FundamentalSnapshot:
-    income = _frame(payloads, "income")
-    balance = _frame(payloads, "balance")
-    cashflow = _frame(payloads, "cashflow")
-    ratios = _frame(payloads, "ratios")
+    """Convenience wrapper: build frames from payload rows and compute as of `as_of`."""
+    return compute_fundamentals_from_frames(symbol, build_statement_frames(payloads), as_of, price, max_staleness_days)
+
+
+def compute_fundamentals_from_frames(
+    symbol: str, frames: Dict[str, pd.DataFrame], as_of: date, price: Optional[float], max_staleness_days: int = 400
+) -> FundamentalSnapshot:
+    """Point-in-time fundamentals: only statement rows visible on `as_of` are used."""
+    income = _visible(frames, "income", as_of)
+    balance = _visible(frames, "balance", as_of)
+    cashflow = _visible(frames, "cashflow", as_of)
+    ratios = _visible(frames, "ratios", as_of)
 
     notes: List[str] = []
-    all_periods = [p.period_end for p in payloads]
+    all_periods = [d for df in (income, balance, cashflow, ratios) if not df.empty for d in df["period_end"]]
     last_period = max(all_periods) if all_periods else None
-    filings = [p.filing_date for p in payloads if p.filing_date]
+    filings = [d for df in (income, balance, cashflow, ratios) if not df.empty for d in df["filing_date"].dropna()]
     last_filing = max(filings) if filings else None
     snap = FundamentalSnapshot(symbol, as_of, last_period, last_filing, len(income), notes=notes)
 
