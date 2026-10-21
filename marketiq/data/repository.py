@@ -163,17 +163,27 @@ def upsert_fundamental_payloads(session: Session, rows: Iterable[dict]) -> int:
     return n
 
 
+UNKNOWN_FILING_LAG_DAYS = 45  # conservative 10-Q lag applied when a payload carries no filing date
+
+
+def payload_visible_on(payload: FundamentalPayload, as_of: date, lag_days: int = UNKNOWN_FILING_LAG_DAYS) -> bool:
+    """Point-in-time visibility: use the filing date when known, otherwise period end plus a lag."""
+    if payload.filing_date is not None:
+        return payload.filing_date <= as_of
+    return payload.period_end + timedelta(days=lag_days) <= as_of
+
+
 def get_fundamental_payloads(
     session: Session, symbol: str, statement: Optional[str] = None, as_of: Optional[date] = None
 ) -> List[FundamentalPayload]:
-    """Payloads ordered by period_end ascending. With `as_of`, only rows whose filing date (or period
-    end when the filing date is unknown) is on or before `as_of`, which keeps point-in-time discipline."""
+    """Payloads ordered by period_end ascending. With `as_of`, only rows visible on that date
+    (see `payload_visible_on`), which keeps point-in-time discipline."""
     stmt = select(FundamentalPayload).where(FundamentalPayload.symbol == symbol)
     if statement:
         stmt = stmt.where(FundamentalPayload.statement == statement)
     rows = list(session.scalars(stmt.order_by(FundamentalPayload.period_end)))
     if as_of is not None:
-        rows = [r for r in rows if (r.filing_date or r.period_end) <= as_of]
+        rows = [r for r in rows if payload_visible_on(r, as_of)]
     return rows
 
 

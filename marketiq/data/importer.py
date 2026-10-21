@@ -31,15 +31,37 @@ def _parse_date(v) -> Optional[date]:
         return None
 
 
-def import_prices(session: Session, finrlx_db: Path, symbols: Iterable[str]) -> Dict[str, int]:
+def detect_partial_last_day(conn: sqlite3.Connection, ratio_threshold: float = 0.5) -> Optional[str]:
+    """The bundled FinRL-X snapshot was taken intraday on its final date (volumes are a fraction of
+    the prior session's across every ticker). Return that date if the cross-ticker median volume on
+    the last date is below `ratio_threshold` x the median on the previous date, else None."""
+    df = pd.read_sql_query(
+        "SELECT date, volume FROM price_data WHERE date IN (SELECT DISTINCT date FROM price_data ORDER BY date DESC LIMIT 2)",
+        conn,
+    )
+    if df.empty or df["date"].nunique() < 2:
+        return None
+    med = df.groupby("date")["volume"].median().sort_index()
+    last, prev = med.iloc[-1], med.iloc[-2]
+    if prev and last / prev < ratio_threshold:
+        logger.warning("Dropping %s from import: median volume is %.0f%% of the prior day (partial session)",
+                       med.index[-1], last / prev * 100)
+        return str(med.index[-1])
+    return None
+
+
+def import_prices(session: Session, finrlx_db: Path, symbols: Iterable[str], drop_partial_last_day: bool = True) -> Dict[str, int]:
     counts: Dict[str, int] = {}
     with sqlite3.connect(finrlx_db) as conn:
+        partial = detect_partial_last_day(conn) if drop_partial_last_day else None
         for sym in symbols:
             df = pd.read_sql_query(
                 "SELECT date, open, high, low, close, adj_close, volume FROM price_data WHERE ticker = ? ORDER BY date",
                 conn,
                 params=(sym,),
             )
+            if partial:
+                df = df[df["date"] != partial]
             if df.empty:
                 logger.warning("No FinRL-X price rows for %s", sym)
                 counts[sym] = 0

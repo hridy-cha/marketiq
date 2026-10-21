@@ -96,6 +96,42 @@ def fetch_cmd(
             console.print(f"News ({p.name}): new articles " + ", ".join(f"{k}={v}" for k, v in res.items()))
 
 
+@app.command("scan")
+def scan_cmd(
+    as_of: Optional[str] = typer.Option(None, help="Evaluate as of this date (default: latest stored bar)"),
+    no_persist: bool = typer.Option(False, help="Do not store score/signal snapshots"),
+    no_ml: bool = typer.Option(False, help="Skip the ML component even if a model exists"),
+    explain: Optional[str] = typer.Option(None, help="Print the full explanation for one symbol"),
+):
+    """Score and rank the universe, emit signals, and store snapshots."""
+    from marketiq.data.db import init_db, session_scope
+    from marketiq.ml.registry import load_predictor
+    from marketiq.scanner import run_scan
+
+    init_db()
+    predictor, horizon = (None, None) if no_ml else load_predictor()
+    with session_scope() as s:
+        rows = run_scan(s, date.fromisoformat(as_of) if as_of else None, persist=not no_persist,
+                        ml_predictor=predictor, ml_horizon=horizon)
+    table = Table(title=f"MarketIQ scan as of {rows[0].as_of if rows else 'n/a'}")
+    for col in ("#", "Symbol", "Score", "Signal", "Rule", "Trend", "RSI", "Close", "Risk flags"):
+        table.add_column(col, justify="right" if col in ("Score", "RSI", "Close", "#") else "left")
+    for i, r in enumerate(rows, 1):
+        table.add_row(str(i), r.symbol, f"{r.score.score:.1f}", r.signal.signal, r.signal.rule,
+                      r.patterns["trend_regime"]["direction"], f"{(r.indicators.get('rsi_14') or 0):.0f}",
+                      f"{r.indicators.get('close'):.2f}", "; ".join(r.signal.risk_flags)[:60])
+    console.print(table)
+    if explain:
+        for r in rows:
+            if r.symbol == explain.upper():
+                console.rule(f"{r.symbol} explanation")
+                for line in r.score.explanation:
+                    console.print("  " + line)
+                console.print(f"Signal {r.signal.signal} ({r.signal.rule}):")
+                for line in r.signal.reasons:
+                    console.print("  - " + line)
+
+
 @app.command("coverage")
 def coverage_cmd():
     """Show stored price coverage per symbol."""

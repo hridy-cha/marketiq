@@ -70,3 +70,14 @@ def test_score_and_signal_snapshots(db_session):
     assert prev.score == 61.2
     repo.save_signal(db_session, symbol="AAPL", as_of=date(2024, 1, 3), signal="BUY", score=70.0, reasons=["r"])
     assert repo.latest_signals(db_session)["AAPL"].signal == "BUY"
+
+
+def test_payload_without_filing_date_hidden_until_lag(db_session):
+    from marketiq.data.models import FundamentalPayload
+
+    row = FundamentalPayload(symbol="X", statement="ratios", period_end=date(2024, 12, 28), filing_date=None, data={})
+    assert not repo.payload_visible_on(row, date(2024, 12, 31))
+    assert repo.payload_visible_on(row, date(2025, 2, 15))
+    filed = FundamentalPayload(symbol="X", statement="income", period_end=date(2024, 12, 28), filing_date=date(2025, 1, 31), data={})
+    assert not repo.payload_visible_on(filed, date(2025, 1, 30))
+    assert repo.payload_visible_on(filed, date(2025, 1, 31))
