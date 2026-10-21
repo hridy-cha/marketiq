@@ -160,3 +160,10 @@ ehthumbs.db
 Thumbs.db
 
 TODO
+# MarketIQ
+/data/marketiq.db*
+/models/*
+!/models/.gitkeep
+web/node_modules/
+web/.next/
+web/out/

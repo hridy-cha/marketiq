@@ -1,0 +1,38 @@
+# MarketIQ scan universe.
+# 25 large-cap US stocks across sectors, plus SPY as the benchmark.
+# Every symbol below is present in the bundled FinRL-X price database (2015-06-15 to 2025-10-16),
+# so the platform runs offline on real data. Edit freely; `marketiq fetch` fills gaps from the
+# configured live provider.
+
+benchmark: SPY
+
+tickers:
+  - { symbol: AAPL,  name: Apple,                sector: Technology }
+  - { symbol: MSFT,  name: Microsoft,            sector: Technology }
+  - { symbol: NVDA,  name: NVIDIA,               sector: Technology }
+  - { symbol: AVGO,  name: Broadcom,             sector: Technology }
+  - { symbol: AMD,   name: Advanced Micro Devices, sector: Technology }
+  - { symbol: CRM,   name: Salesforce,           sector: Technology }
+  - { symbol: AMZN,  name: Amazon,               sector: Consumer Cyclical }
+  - { symbol: TSLA,  name: Tesla,                sector: Consumer Cyclical }
+  - { symbol: HD,    name: Home Depot,           sector: Consumer Cyclical }
+  - { symbol: GOOGL, name: Alphabet,             sector: Communication Services }
+  - { symbol: META,  name: Meta Platforms,       sector: Communication Services }
+  - { symbol: NFLX,  name: Netflix,              sector: Communication Services }
+  - { symbol: DIS,   name: Walt Disney,          sector: Communication Services }
+  - { symbol: JPM,   name: JPMorgan Chase,       sector: Financial Services }
+  - { symbol: BAC,   name: Bank of America,      sector: Financial Services }
+  - { symbol: V,     name: Visa,                 sector: Financial Services }
+  - { symbol: MA,    name: Mastercard,           sector: Financial Services }
+  - { symbol: UNH,   name: UnitedHealth,         sector: Healthcare }
+  - { symbol: JNJ,   name: Johnson & Johnson,    sector: Healthcare }
+  - { symbol: LLY,   name: Eli Lilly,            sector: Healthcare }
+  - { symbol: PFE,   name: Pfizer,               sector: Healthcare }
+  - { symbol: XOM,   name: Exxon Mobil,          sector: Energy }
+  - { symbol: CVX,   name: Chevron,              sector: Energy }
+  - { symbol: PG,    name: Procter & Gamble,     sector: Consumer Defensive }
+  - { symbol: KO,    name: Coca-Cola,            sector: Consumer Defensive }
+  - { symbol: WMT,   name: Walmart,              sector: Consumer Defensive }
+  - { symbol: COST,  name: Costco,               sector: Consumer Defensive }
+  - { symbol: CAT,   name: Caterpillar,          sector: Industrials }
+  - { symbol: BA,    name: Boeing,               sector: Industrials }

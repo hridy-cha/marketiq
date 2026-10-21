@@ -1,0 +1,35 @@
+# MarketIQ signal rules. The engine applies these in order; the first matching rule wins.
+# Every emitted signal lists which rule fired and which conditions were true. See docs/SIGNALS.md.
+
+thresholds:
+  buy_score: 70          # composite score at or above this is required for BUY
+  sell_score: 35         # composite score at or below this is required for SELL
+  watch_low: 55          # WATCH band is [watch_low, buy_score) with a catalyst
+  min_history_days: 210  # need at least this many bars (SMA200 + buffer) to emit anything but HOLD
+
+risk_flags:
+  earnings_within_days: 7        # flag when a known earnings date is within this many days
+  max_stretch_atr: 3.0           # price more than this many ATRs above SMA20 is "extended"
+  rsi_overbought: 80
+  rsi_oversold: 20
+  max_atr_pct: 6.0               # ATR% above this is "high volatility"
+
+rules:
+  buy:
+    require_trend_bullish: true          # SMA20 > SMA50 and price > SMA200
+    require_no_sell_patterns: true       # no death cross / breakdown in the last 5 bars
+    block_if_extended: true              # do not BUY when stretch > max_stretch_atr
+    block_if_rsi_overbought: true
+  sell:
+    any_of:
+      - score_at_or_below_sell          # composite <= sell_score
+      - death_cross_recent              # SMA50 crossed below SMA200 within 5 bars
+      - breakdown_recent                # close below 20d low with volume confirmation within 5 bars
+      - trend_bearish_and_momentum_down # SMA20 < SMA50 < SMA200 and MACD histogram < 0 and RSI < 45
+  watch:
+    catalysts:
+      - breakout_recent
+      - golden_cross_recent
+      - macd_bullish_cross_recent
+      - rsi_oversold_reversal
+      - score_rising                   # score up by >= 8 points vs previous snapshot

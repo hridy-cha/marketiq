@@ -1,0 +1,60 @@
+# MarketIQ scoring configuration.
+#
+# The composite score is 0-100. Each component is scored 0-100 from its own factors, then combined
+# with the weights below. Weights are normalized to sum to 1 at load time; if a component has no data
+# for a ticker (for example news when no news provider is configured), it is dropped for that ticker
+# and the remaining weights are renormalized. The explanation attached to every score says which
+# components were used.
+#
+# See docs/SCORING.md for the exact factor formulas.
+
+weights:
+  trend: 0.22          # SMA 20/50/200 alignment, price vs moving averages, 52-week position
+  momentum: 0.18       # RSI, MACD histogram and crossover, 20/60-day returns vs benchmark
+  volume: 0.10         # volume vs 20-day average, OBV trend, breakout confirmation
+  volatility: 0.10     # ATR% and realized volatility (lower is better up to a point), drawdown from high
+  fundamentals: 0.25   # growth, profitability, leverage, valuation (universe percentiles)
+  sentiment: 0.10      # aggregated news sentiment, recency weighted
+  ml: 0.05             # ML probability that forward return over the horizon is positive
+
+# Factor-level knobs
+trend:
+  sma_fast: 20
+  sma_mid: 50
+  sma_slow: 200
+
+momentum:
+  rsi_period: 14
+  rsi_ideal_low: 50      # RSI inside [ideal_low, ideal_high] scores highest
+  rsi_ideal_high: 70
+  return_windows: [20, 60]
+
+volume:
+  volume_sma: 20
+
+volatility:
+  atr_period: 14
+  atr_pct_good: 1.5      # ATR as % of price at or below this scores 100 on that factor
+  atr_pct_bad: 5.0       # at or above this scores 0
+
+fundamentals:
+  # Direction tells the percentile ranker whether higher is better (1) or lower is better (-1).
+  factors:
+    revenue_growth_yoy: 1
+    eps_growth_yoy: 1
+    net_margin: 1
+    roe: 1
+    debt_to_equity: -1
+    current_ratio: 1
+    fcf_per_share: 1
+    pe_ratio: -1
+    price_to_book: -1
+  max_staleness_days: 400   # ignore fundamentals older than this
+
+sentiment:
+  lookback_days: 14
+  half_life_days: 5
+  min_articles: 2          # fewer than this = component unavailable
+
+ml:
+  model_name: direction_lgbm
