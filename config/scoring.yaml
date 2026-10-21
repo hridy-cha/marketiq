@@ -58,3 +58,9 @@ sentiment:
 
 ml:
   model_name: direction_lgbm
+  # Validation gate. The scan only uses a trained model whose pooled walk-forward metrics meet
+  # both bars; otherwise the ML component is reported as unavailable and its weight redistributed.
+  # On the bundled 2015-2025 data the baseline model scores AUC ~0.48-0.51 (no skill), so with
+  # these defaults it does not contribute until someone trains something that does.
+  min_walk_forward_auc: 0.53
+  min_walk_forward_balanced_accuracy: 0.52

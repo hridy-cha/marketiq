@@ -31,7 +31,7 @@ from marketiq.signals.engine import SignalResult, evaluate as evaluate_signal
 
 logger = logging.getLogger(__name__)
 
-MLPredictor = Callable[[str, pd.DataFrame], Optional[float]]  # (symbol, indicator frame as of date) -> prob_up
+MLPredictor = Callable[[str, pd.DataFrame, Optional[pd.DataFrame]], Optional[float]]  # (symbol, ind, bench_ind) -> prob_up
 
 
 @dataclass
@@ -70,6 +70,7 @@ class ScanContext:
     earnings: Dict[str, List[date]] = field(default_factory=dict)
     ml_predictor: Optional[MLPredictor] = None
     ml_horizon: Optional[int] = None
+    ml_status: str = ""
 
     @classmethod
     def load(
@@ -83,10 +84,11 @@ class ScanContext:
         with_news: bool = True,
         ml_predictor: Optional[MLPredictor] = None,
         ml_horizon: Optional[int] = None,
+        ml_status: str = "",
     ) -> "ScanContext":
         universe = universe or load_universe()
         ctx = cls(universe, scoring or load_scoring_config(), signals or load_signal_config(),
-                  ml_predictor=ml_predictor, ml_horizon=ml_horizon)
+                  ml_predictor=ml_predictor, ml_horizon=ml_horizon, ml_status=ml_status)
         for sym in universe.all_symbols:
             df = repo.get_price_frame(session, sym, start=start, end=end)
             if df.empty:
@@ -148,8 +150,9 @@ class ScanContext:
             window_start = as_of_dt - timedelta(days=scfg.lookback_days)
             articles = [a for a in self.news.get(sym, []) if window_start <= a.published_at <= as_of_dt]
             sent = aggregate_sentiment(articles, as_of_dt, scfg.half_life_days, scfg.min_articles) if self.news else None
-            ml_prob = self.ml_predictor(sym, ind) if self.ml_predictor else None
-            score = score_symbol(sym, ind, self.scoring, bench_ind, pct.get(sym), snaps[sym].factors, sent, ml_prob, self.ml_horizon)
+            ml_prob = self.ml_predictor(sym, ind, bench_ind) if self.ml_predictor else None
+            score = score_symbol(sym, ind, self.scoring, bench_ind, pct.get(sym), snaps[sym].factors, sent, ml_prob,
+                                 self.ml_horizon, ml_note=None if ml_prob is not None else (self.ml_status or None))
             prev = (previous_scores or {}).get(sym)
             signal = evaluate_signal(score, patterns, ind, self.signals, self._next_earnings(sym, d), prev)
             latest = {k: (None if pd.isna(v) else float(v)) for k, v in ind.iloc[-1].items()}
@@ -159,8 +162,8 @@ class ScanContext:
 
 
 def run_scan(session: Session, as_of: Optional[date] = None, persist: bool = True, with_news: bool = True,
-             ml_predictor: Optional[MLPredictor] = None, ml_horizon: Optional[int] = None) -> List[ScanRow]:
-    ctx = ScanContext.load(session, with_news=with_news, ml_predictor=ml_predictor, ml_horizon=ml_horizon)
+             ml_predictor: Optional[MLPredictor] = None, ml_horizon: Optional[int] = None, ml_status: str = "") -> List[ScanRow]:
+    ctx = ScanContext.load(session, with_news=with_news, ml_predictor=ml_predictor, ml_horizon=ml_horizon, ml_status=ml_status)
     # previous snapshot scores feed the "score_rising" catalyst
     first_sym = next(iter(ctx.indicators), None)
     ref_date = as_of or (ctx.indicators[first_sym].index[-1].date() if first_sym else date.today())

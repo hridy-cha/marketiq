@@ -109,10 +109,11 @@ def scan_cmd(
     from marketiq.scanner import run_scan
 
     init_db()
-    predictor, horizon = (None, None) if no_ml else load_predictor()
+    predictor, horizon, ml_status = (None, None, "ML skipped (--no-ml)") if no_ml else load_predictor()
+    console.print(f"ML component: {ml_status}")
     with session_scope() as s:
         rows = run_scan(s, date.fromisoformat(as_of) if as_of else None, persist=not no_persist,
-                        ml_predictor=predictor, ml_horizon=horizon)
+                        ml_predictor=predictor, ml_horizon=horizon, ml_status=ml_status)
     table = Table(title=f"MarketIQ scan as of {rows[0].as_of if rows else 'n/a'}")
     for col in ("#", "Symbol", "Score", "Signal", "Rule", "Trend", "RSI", "Close", "Risk flags"):
         table.add_column(col, justify="right" if col in ("Score", "RSI", "Close", "#") else "left")
@@ -130,6 +131,39 @@ def scan_cmd(
                 console.print(f"Signal {r.signal.signal} ({r.signal.rule}):")
                 for line in r.signal.reasons:
                     console.print("  - " + line)
+
+
+@app.command("train")
+def train_cmd(
+    horizon: Optional[int] = typer.Option(None, help="Forward horizon in trading days (default ML_HORIZON_DAYS)"),
+    threshold: Optional[float] = typer.Option(None, help="Return threshold for the positive class (default 0)"),
+    start: Optional[str] = typer.Option(None, help="Only use bars from this date"),
+    folds: int = typer.Option(5, help="Walk-forward folds (6-month test windows each)"),
+):
+    """Train the direction model with walk-forward validation and register it."""
+    from marketiq.data.db import init_db, session_scope
+    from marketiq.ml.registry import train_and_register
+
+    init_db()
+    with session_scope() as s:
+        meta = train_and_register(s, horizon_days=horizon, threshold=threshold, start=start, n_folds=folds)
+    wf = meta["walk_forward"]
+    table = Table(title=f"Walk-forward validation: {meta['name']} {meta['version']} ({meta['backend']}, horizon {meta['horizon_days']}d)")
+    for col in ("Fold", "Train end", "Test window", "n test", "Accuracy", "Bal. acc", "AUC", "Top-decile prec", "Top-decile fwd ret", "All fwd ret", "Base rate"):
+        table.add_column(col, justify="right" if col not in ("Train end", "Test window") else "left")
+    for f in wf["folds"]:
+        table.add_row(str(f["fold"]), f["train_end"], f"{f['test_start']}..{f['test_end']}", str(f["n_test"]),
+                      f"{f['accuracy']:.3f}", f"{f['balanced_accuracy']:.3f}", f"{f['auc']:.3f}" if f["auc"] is not None else "n/a",
+                      f"{f['top_decile_precision']:.3f}", f"{f['top_decile_mean_fwd_return'] * 100:+.2f}%",
+                      f"{f['all_mean_fwd_return'] * 100:+.2f}%", f"{f['base_rate']:.3f}")
+    p = wf["pooled"]
+    if p:
+        table.add_row("pooled", "", "", str(p["n_test_rows"]), f"{p['accuracy']:.3f}", f"{p['balanced_accuracy']:.3f}",
+                      f"{p['auc']:.3f}" if p["auc"] is not None else "n/a", f"{p['top_decile_precision']:.3f}",
+                      f"{p['top_decile_mean_fwd_return'] * 100:+.2f}%", f"{p['all_mean_fwd_return'] * 100:+.2f}%", f"{p['base_rate']:.3f}")
+    console.print(table)
+    console.print("Top features: " + ", ".join(f"{k} {v:.2f}" for k, v in list(wf["feature_importance"].items())[:8]))
+    console.print(f"Saved to {meta['path']}")
 
 
 @app.command("coverage")

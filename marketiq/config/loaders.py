@@ -72,6 +72,8 @@ class SentimentConfig(BaseModel):
 
 class MLConfig(BaseModel):
     model_name: str = "direction_lgbm"
+    min_walk_forward_auc: float = 0.53
+    min_walk_forward_balanced_accuracy: float = 0.52
 
 
 class ScoringConfig(BaseModel):

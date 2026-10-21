@@ -227,10 +227,11 @@ def score_sentiment(agg, cfg: ScoringConfig) -> Component:
     return Component("sentiment", s, w, w, True, [f])
 
 
-def score_ml(prob_up: Optional[float], cfg: ScoringConfig, horizon_days: Optional[int] = None) -> Component:
+def score_ml(prob_up: Optional[float], cfg: ScoringConfig, horizon_days: Optional[int] = None,
+             note: Optional[str] = None) -> Component:
     w = cfg.weights.get("ml", 0)
     if prob_up is None:
-        return Component("ml", None, 0.0, w, False, [], "No trained model prediction")
+        return Component("ml", None, 0.0, w, False, [], note or "No trained model prediction")
     s = float(np.clip(prob_up, 0, 1)) * 100.0
     note = f"model probability of a positive return over {horizon_days or '?'} trading days: {prob_up:.2f}"
     return Component("ml", s, w, w, True, [Factor("prob_up", prob_up, s, note)])
@@ -274,6 +275,7 @@ def score_symbol(
     sentiment_agg=None,
     ml_prob: Optional[float] = None,
     ml_horizon: Optional[int] = None,
+    ml_note: Optional[str] = None,
 ) -> ScoreResult:
     row = ind.iloc[-1]
     as_of = ind.index[-1].strftime("%Y-%m-%d")
@@ -289,7 +291,7 @@ def score_symbol(
         "volatility": score_volatility(row, cfg),
         "fundamentals": score_fundamentals(fundamentals_pct, fundamentals_raw, cfg),
         "sentiment": score_sentiment(sentiment_agg, cfg),
-        "ml": score_ml(ml_prob, cfg, ml_horizon),
+        "ml": score_ml(ml_prob, cfg, ml_horizon, ml_note),
     }
     # Drop components whose configured weight is zero so they neither count nor clutter the output.
     components = {k: v for k, v in components.items() if cfg.weights.get(k, 0) > 0}
