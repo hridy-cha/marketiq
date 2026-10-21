@@ -328,5 +328,15 @@ def coverage_cmd():
     console.print(table)
 
 
+
+@app.command("serve")
+def serve_cmd(host: Optional[str] = None, port: Optional[int] = None, reload: bool = False):
+    """Start the FastAPI backend (OpenAPI docs at /docs)."""
+    import uvicorn
+
+    s = get_settings().api
+    uvicorn.run("marketiq.api.app:app", host=host or s.host, port=port or s.port, reload=reload)
+
+
 if __name__ == "__main__":
     app()

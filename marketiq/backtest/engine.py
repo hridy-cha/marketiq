@@ -260,7 +260,8 @@ class SignalBacktester:
             metrics["avg_hold_days"] = float(np.mean([t.hold_days for t in closed]))
             gross_win = sum(t.pnl for t in wins)
             gross_loss = -sum(t.pnl for t in closed if (t.pnl or 0) <= 0)
-            metrics["profit_factor"] = gross_win / gross_loss if gross_loss > 0 else float("inf") if gross_win > 0 else 0.0
+            # None when there were no losing trades (undefined), so the value stays JSON-safe.
+            metrics["profit_factor"] = gross_win / gross_loss if gross_loss > 0 else None
         metrics["avg_exposure"] = float(exposure_s.mean())
         metrics["total_commission"] = float(sum(t.commission for t in trades))
         return BacktestResult(cfg, equity_s, cash_s, trades, metrics, bench_curve, exposure_s, signals_log)
