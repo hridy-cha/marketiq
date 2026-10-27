@@ -34,7 +34,8 @@ def _make_estimator(seed: int = 42):
             n_estimators=300, learning_rate=0.03, num_leaves=15, min_child_samples=50, subsample=0.8,
             subsample_freq=1, colsample_bytree=0.8, reg_lambda=1.0, random_state=seed, verbose=-1,
         ), "lightgbm"
-    except ImportError:  # pragma: no cover - depends on environment
+    except (ImportError, OSError) as exc:  # not installed, or macOS wheel missing libomp
+        logger.info("LightGBM unavailable (%s); using scikit-learn HistGradientBoosting", type(exc).__name__)
         from sklearn.ensemble import HistGradientBoostingClassifier
 
         return HistGradientBoostingClassifier(max_iter=300, learning_rate=0.03, max_leaf_nodes=15,
