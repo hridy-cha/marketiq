@@ -167,3 +167,6 @@ TODO
 web/node_modules/
 web/.next/
 web/out/
+
+# Python-packaging ignore above must not swallow the frontend lib folder
+!web/lib/
