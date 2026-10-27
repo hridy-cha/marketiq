@@ -106,17 +106,29 @@ class DirectionModel:
         self.train_start = str(panel.index.min().date())
         self.train_end = str(panel.index.max().date())
         self.n_train = len(panel)
+        self._importance = self._compute_importance(X, y)
         return self
+
+    def _compute_importance(self, X: np.ndarray, y: np.ndarray) -> Dict[str, float]:
+        """Native split-gain importance when the estimator exposes it (LightGBM); otherwise
+        permutation importance on a sample of the training rows (scikit-learn fallback)."""
+        imp = getattr(self.estimator, "feature_importances_", None)
+        if imp is None:
+            from sklearn.inspection import permutation_importance
+
+            n = min(len(X), 3000)
+            rng = np.random.default_rng(self.seed)
+            idx = rng.choice(len(X), n, replace=False) if len(X) > n else np.arange(len(X))
+            res = permutation_importance(self.estimator, X[idx], y[idx], n_repeats=3, random_state=self.seed, scoring="roc_auc")
+            imp = np.clip(res.importances_mean, 0, None)
+        total = float(np.sum(imp)) or 1.0
+        return {f: float(v) / total for f, v in sorted(zip(self.features, imp), key=lambda t: -t[1])}
 
     def predict_proba(self, X: pd.DataFrame) -> np.ndarray:
         return self.estimator.predict_proba(X[self.features].values)[:, 1]
 
     def feature_importance(self) -> Dict[str, float]:
-        imp = getattr(self.estimator, "feature_importances_", None)
-        if imp is None:
-            return {}
-        total = float(np.sum(imp)) or 1.0
-        return {f: float(v) / total for f, v in sorted(zip(self.features, imp), key=lambda t: -t[1])}
+        return dict(getattr(self, "_importance", {}) or {})
 
 
 def walk_forward(
