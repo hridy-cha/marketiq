@@ -62,6 +62,12 @@ marketiq serve                   # http://127.0.0.1:8000/docs
 cd web && npm install && npm run dev   # http://localhost:3000
 ```
 
+Platform notes:
+- macOS without Homebrew: the LightGBM wheel cannot load (`libomp` missing). MarketIQ falls back to
+  scikit-learn's gradient boosting automatically; `brew install libomp` enables LightGBM.
+- If your shell exports `NODE_ENV=production`, `npm install` skips dev dependencies and the frontend
+  build fails. Use `NODE_ENV=development npm ci --include=dev` in `web/`.
+
 With internet access, extend the dataset forward and add news/earnings dates:
 
 ```bash
