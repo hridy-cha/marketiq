@@ -152,14 +152,17 @@ export class ApiError extends Error {
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...(init?.headers || {}) } });
   if (!res.ok) {
-    let detail = res.statusText;
+    let detail: string | null = null;
     try {
       const body = await res.json();
       detail = body.detail ?? JSON.stringify(body);
     } catch {
-      /* ignore */
+      /* not JSON: the Next.js proxy could not reach the backend */
     }
-    throw new ApiError(res.status, detail);
+    if (detail == null && res.status >= 500) {
+      detail = "The MarketIQ backend is not running. Start it with MarketIQ.command (or `marketiq serve`), then refresh this page.";
+    }
+    throw new ApiError(res.status, detail ?? res.statusText);
   }
   return res.json() as Promise<T>;
 }
