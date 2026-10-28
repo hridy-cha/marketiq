@@ -3,16 +3,27 @@ services:
     build: .
     ports: ["8000:8000"]
     volumes:
-      - ./data:/app/data
+      - ./data:/app/data        # database + bundled dataset (imported automatically on first start)
       - ./models:/app/models
       - ./config:/app/config
-    env_file: .env
+    env_file:
+      - path: .env
+        required: false       # optional: API keys for live data; not needed for the bundled dataset
     environment:
       - API_HOST=0.0.0.0
       - API_CORS_ORIGINS=["http://localhost:3000"]
+      - ENABLE_LIVE_TRADING=false
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 30            # first start extracts and imports ~2 minutes of data
+      start_period: 180s
   web:
     build: ./web
     ports: ["3000:3000"]
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:8000
-    depends_on: [api]
+      - API_URL=http://api:8000   # read at request time by the dashboard's /api proxy
+    depends_on:
+      api:
+        condition: service_healthy

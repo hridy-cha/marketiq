@@ -63,6 +63,50 @@ def import_finrlx_cmd(
     console.print(table)
 
 
+@app.command("bootstrap")
+def bootstrap_cmd(scan: bool = typer.Option(True, help="Run a first scan after importing")):
+    """First-run setup, safe to repeat: create tables, extract the bundled FinRL-X dataset if
+    needed, import it when the price table is empty, and run a first scan. Used by the Docker image."""
+    from marketiq.data import repository as repo
+    from marketiq.data.db import init_db, session_scope
+    from marketiq.data.importer import import_all
+
+    init_db()
+    s = get_settings()
+    universe = load_universe()
+    with session_scope() as sess:
+        rows = [{"symbol": t.symbol, "name": t.name, "sector": t.sector} for t in universe.tickers]
+        rows.append({"symbol": universe.benchmark, "name": "Benchmark", "sector": "", "is_benchmark": True})
+        repo.upsert_tickers(sess, rows)
+        coverage = repo.price_coverage(sess)
+        have = set(coverage["symbol"]) if not coverage.empty else set()
+        missing = [sym for sym in universe.all_symbols if sym not in have]
+        if missing:
+            db_path = s.data.path("finrlx_db")
+            archive = db_path.with_suffix(".7z")
+            if not db_path.exists() and archive.exists():
+                console.print(f"Extracting {archive.name} (one time, ~1 minute)...")
+                import py7zr
+
+                with py7zr.SevenZipFile(archive, "r") as z:
+                    z.extractall(db_path.parent)
+            if db_path.exists():
+                console.print(f"Importing {len(missing)} symbols from the bundled FinRL-X dataset...")
+                result = import_all(sess, db_path, missing)
+                console.print("Imported price bars: " + ", ".join(f"{k}={v}" for k, v in result["prices"].items()))
+            else:
+                console.print(f"[yellow]No bundled dataset at {db_path} or {archive}; run `marketiq fetch` with internet access.")
+        else:
+            console.print(f"Prices already present for {len(have)} symbols; import skipped.")
+        if scan and not repo.latest_scores(sess):
+            from marketiq.scanner import run_scan
+
+            console.print("Running first scan...")
+            rows_out = run_scan(sess, persist=True)
+            console.print(f"Scan stored for {len(rows_out)} symbols as of {rows_out[0].as_of if rows_out else 'n/a'}.")
+    console.print("Bootstrap complete.")
+
+
 @app.command("fetch")
 def fetch_cmd(
     start: str = typer.Option("2015-01-01", help="Earliest date to backfill"),

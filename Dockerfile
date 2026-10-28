@@ -9,4 +9,5 @@ COPY config ./config
 RUN pip install --no-cache-dir -e ".[ml]" py7zr
 RUN mkdir -p data models
 EXPOSE 8000
-CMD ["sh", "-c", "marketiq init-db && marketiq serve --host 0.0.0.0 --port 8000"]
+# bootstrap: create tables, import the bundled dataset on first run, run a first scan; then serve.
+CMD ["sh", "-c", "marketiq bootstrap && marketiq serve --host 0.0.0.0 --port 8000"]
